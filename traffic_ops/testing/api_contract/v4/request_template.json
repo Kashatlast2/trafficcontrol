@@ -1,0 +1,48 @@
+{
+	"cdns": [
+		{
+			"name": "test",
+			"domainName": "quest",
+			"dnssecEnabled": false
+		}
+	],
+	"cachegroup": [
+		{
+			"name": "test",
+			"shortName": "test",
+			"latitude": 38.897663,
+			"longitude": -77.036574,
+			"fallbackToClosest": true,
+			"localizationMethods": [
+				"DEEP_CZ",
+				"CZ",
+				"GEO"
+			],
+			"typeId": 23
+		}
+	],
+	"parameters": [
+		{
+			"configFile": "records.config",
+			"name": "test",
+			"profiles": [
+				"EDGE_TIER_ATS_CACHE",
+				"MID_TIER_ATS_CACHE"
+			],
+			"secure": false,
+			"value": "quest"
+		}
+	],
+    "statuses": [
+		{
+			"name": "example",
+			"description" : "test"
+		}
+	],
+    "divisions": [
+        {
+            "name": "test"
+        }
+    ]
+}
+
