@@ -34,6 +34,8 @@ from trafficops.restapi import OperationError
 # Create and configure logger
 logger = logging.getLogger()
 
+primitive = bool | int | float | str | None
+
 JSONData: TypeAlias = Union[dict[str, object], list[object], bool, int, float, str | None]
 JSONData.__doc__ = """An alias for the kinds of data that JSON can encode."""
 
@@ -125,10 +127,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 		default=os.path.join(os.path.dirname(__file__), "to_data.json")
 	)
 	parser.addoption(
-		"--prerequisites",
-		help="Path to prerequisites file.",
-		default=os.path.join(os.path.dirname(__file__), "prerequisite_data.json")
+		"--request-template",
+		help="Path to request prerequisites file.",
+		default=os.path.join(os.path.dirname(__file__), "request_template.json")
 	)
+	parser.addoption(
+		"--response-template",
+		help="Path to response prerequisites file.",
+		default=os.path.join(os.path.dirname(__file__), "response_template.json")
+	)
+	
 
 def coalesce_config(
 	arg: object | None,
@@ -292,6 +300,67 @@ def to_login(to_args: ArgsType) -> TOSession:
 	logger.info("Successfully logged into Traffic Ops.")
 	return to_session
 
+@pytest.fixture(name="request_template_data", scope="session")
+def request_prerequiste_data(pytestconfig: pytest.Config, request: pytest.FixtureRequest
+			  ) -> list[dict[str, object] | list[object] | primitive]:
+	"""
+	PyTest Fixture to store POST request template data for api endpoint.
+	:param pytestconfig: Session-scoped fixture that returns the session's pytest.Config object.
+	:param request: Fixture to access information about the requesting test function and its fixtures
+
+	:returns: Prerequisite request data for api endpoint.
+	"""
+	request_template_path = pytestconfig.getoption("--request-template")
+	if not isinstance(request_template_path, str):
+		# unlike the configuration file, this must be present
+		raise ValueError("prereqisites path not configured")
+
+	# Response keys for api endpoint
+	data: dict[
+		str,
+		list[dict[str, object] | list[object] | primitive] |\
+			dict[object, object] |\
+			primitive
+		] |\
+	primitive = None
+	with open(request_template_path, encoding="utf-8", mode="r") as prereq_file:
+		data = json.load(prereq_file)
+	if not isinstance(data, dict):
+		raise TypeError(f"request template data must be an object, not '{type(data)}'")
+	request_template = data[request.param]
+	if not isinstance(request_template, list):
+		raise TypeError(f"Request template data must be a list, not '{type(request_template)}'")
+
+	return request_template
+
+@pytest.fixture()
+def response_template_data(pytestconfig: pytest.Config
+			   ) -> dict[str, primitive | list[primitive |
+				      dict[str, object] | list[object]] | dict[object, object]]:
+	"""
+	PyTest Fixture to store response template data for api endpoint.
+	:param pytestconfig: Session-scoped fixture that returns the session's pytest.Config object.
+	:returns: Prerequisite response data for api endpoint.
+	"""
+	prereq_path = pytestconfig.getoption("--response-template")
+	if not isinstance(prereq_path, str):
+		# unlike the configuration file, this must be present
+		raise ValueError("prereqisites path not configured")
+
+	# Response keys for api endpoint
+	response_template: dict[
+		str,
+		list[dict[str, object] | list[object] | primitive] |\
+			dict[object, object] |\
+			primitive
+		] |\
+	primitive = None
+	with open(prereq_path, encoding="utf-8", mode="r") as prereq_file:
+		response_template = json.load(prereq_file)
+	if not isinstance(response_template, dict):
+		raise TypeError(f"Response template data must be an object, not '{type(response_template)}'")
+
+	return response_template
 
 @pytest.fixture()
 def cdn_post_data(to_session: TOSession, cdn_prereq_data: list[JSONData]) -> dict[str, object]:
@@ -336,3 +405,51 @@ def cdn_post_data(to_session: TOSession, cdn_prereq_data: list[JSONData]) -> dic
 	except IndexError:
 		logger.error("No CDN response data from cdns POST request.")
 		sys.exit(1)
+
+@pytest.fixture()
+def status_post_data(to_session: TOSession, request_template_data: list[JSONData]
+		  ) -> dict[str, object]:
+	"""
+	PyTest Fixture to create POST data for status endpoint.
+
+	:param to_session: Fixture to get Traffic Ops session.
+	:param request_template_data: Fixture to get CDN request template data from a prerequisites file.
+	:returns: Sample POST data and the actual API response.
+	"""
+
+	try:
+		status = request_template_data[0]
+	except IndexError as e:
+		raise TypeError(
+			"malformed prerequisite data; no status present in 'status' array property") from e
+
+	if not isinstance(status, dict):
+		raise TypeError(
+			f"malformed prerequisite data; status must be objects, not '{type(status)}'")
+
+	# Return new post data and post response from status POST request
+	randstr = str(randint(0, 1000))
+	try:
+		name = status["name"]
+		if not isinstance(name, str):
+			raise TypeError(f"name must be str, not '{type(name)}'")
+		status["name"] = name[:4] + randstr
+	except KeyError as e:
+		raise TypeError(f"missing Status property '{e.args[0]}'") from e
+
+	logger.info("New status data to hit POST method %s", request_template_data)
+	# Hitting status POST methed
+	response: tuple[JSONData, requests.Response] = to_session.create_status(data=status)
+	try:
+		resp_obj = response[0]
+		if not isinstance(resp_obj, dict):
+			raise TypeError("malformed API response; status is not an object")
+		return resp_obj
+	except IndexError:
+		logger.error("No status response data from status POST request.")
+		sys.exit(1)
+
+
+
+
+

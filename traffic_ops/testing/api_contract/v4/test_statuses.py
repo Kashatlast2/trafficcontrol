@@ -66,17 +66,17 @@ def test_status_contract(
 		status_keys = set(first_status.keys())
 
 		logger.info("Status Keys from statuses endpoint response %s", status_keys)
-		response_template = response_template_data.get("status").get("properties")
+		response_template = response_template_data.get("statuses").get("properties")
 		# validate status values from prereq data in statuses get response.
 		prereq_values = [
 			status_post_data["name"],
 			status_post_data["description"],
 		]
-		get_values = [first_status["name"], first_status["description"], first_status["dnssecEnabled"]]
+		get_values = [first_status["name"], first_status["description"]]
 		get_types = {}
 		for key in first_status:
 			get_types[key] = first_status[key].__class__.__name__
-		logger.info("types from status get response %s", get_types)
+		logger.info("types from statuses get response %s", get_types)
 		response_template_types= {}
 		for key in response_template:
 			response_template_types[key] = response_template.get(key).get("type")
